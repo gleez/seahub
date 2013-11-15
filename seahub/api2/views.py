@@ -3,6 +3,7 @@ import os
 import stat
 import time
 import simplejson as json
+import datetime
 from urllib2 import unquote, quote
 
 from rest_framework import parsers
@@ -22,6 +23,7 @@ from django.template import Context, loader, RequestContext
 from django.template.loader import render_to_string
 from django.shortcuts import render_to_response
 from django.utils.translation import ugettext as _
+from django.utils import timezone
 
 from models import Token
 from authentication import TokenAuthentication
@@ -37,6 +39,7 @@ from seahub.utils import gen_file_get_url, gen_token, gen_file_upload_url, \
     get_ccnet_server_addr_port, string2list, \
     gen_block_get_url
 from seahub.utils.star import star_file, unstar_file
+from seahub.base.templatetags.seahub_tags import email2nickname
 import seahub.settings as settings
 try:
     from seahub.settings import CLOUD_MODE
@@ -1872,6 +1875,56 @@ class AjaxDiscussions(APIView):
 
     def get(self, request, group_id, format=None):
         return more_discussions(request, group_id)
+
+class EventsView(APIView):
+    authentication_classes = (TokenAuthentication, )
+    permission_classes = (IsAuthenticated,)
+    throttle_classes = (UserRateThrottle, )
+
+    def get(self, request, format=None):
+        if not EVENTS_ENABLED:
+            events = None
+            return api_error(status.HTTP_404_NOT_FOUND, 'Events not enabled.')
+
+        email = request.user.username
+        events_count = 15
+        events, events_more_offset = get_user_events(email, 0, events_count)
+        events_more = True if len(events) == events_count else False
+
+        l = []
+        for e in events:
+            d = dict(etype=e.etype)
+            l.append(d)
+            if e.etype == 'repo-update':
+                d['author'] = e.commit.creator_name
+                d['time'] = e.commit.ctime
+                d['desc'] = e.commit.desc
+            else:
+                if e.etype == 'repo-create':
+                    d['author'] = e.creator
+                else:
+                    d['author'] = e.repo_owner
+
+                def utc_to_local(dt):
+                    tz = timezone.get_default_timezone()
+                    utc = dt.replace(tzinfo=timezone.utc)
+                    local = timezone.make_naive(utc, tz)
+                    return local
+
+                epoch = datetime.datetime(1970, 1, 1)
+                local = utc_to_local(e.timestamp)
+                d['time'] = (local - epoch).total_seconds() * 1000
+
+            d['nick'] = email2nickname(d['author'])
+
+        resp = HttpResponse(json.dumps({
+                                'events': l,
+                                'more':  str(events_more),
+                                'more_offset': events_more_offset,}),
+                            status=200,
+                            content_type=json_content_type)
+        return resp
+
 
 class ActivityHtml(APIView):
     authentication_classes = (TokenAuthentication, )
