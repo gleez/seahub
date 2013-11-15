@@ -40,6 +40,7 @@ from seahub.utils import gen_file_get_url, gen_token, gen_file_upload_url, \
     gen_block_get_url
 from seahub.utils.star import star_file, unstar_file
 from seahub.base.templatetags.seahub_tags import email2nickname
+from seahub.avatar.templatetags.avatar_tags import avatar_url
 import seahub.settings as settings
 try:
     from seahub.settings import CLOUD_MODE
@@ -1899,7 +1900,11 @@ class EventsView(APIView):
                 d['author'] = e.commit.creator_name
                 d['time'] = e.commit.ctime
                 d['desc'] = e.commit.desc
+                d['repo_id'] = e.repo.id
+                d['repo_name'] = e.repo.name
             else:
+                d['repo_id'] = e.repo_id
+                d['repo_name'] = e.repo_name
                 if e.etype == 'repo-create':
                     d['author'] = e.creator
                 else:
@@ -1919,12 +1924,33 @@ class EventsView(APIView):
 
         resp = HttpResponse(json.dumps({
                                 'events': l,
-                                'more':  str(events_more),
+                                'more':  events_more,
                                 'more_offset': events_more_offset,}),
                             status=200,
                             content_type=json_content_type)
         return resp
 
+class AvatarView(APIView):
+    authentication_classes = (TokenAuthentication, )
+    permission_classes = (IsAuthenticated,)
+    throttle_classes = (UserRateThrottle, )
+
+    def get(self, request, format=None):
+        email = request.GET.get('user', request.user.username)
+
+        size = request.GET.get('size', None)
+        if size is None:
+            return api_error(status.HTTP_400_BAD_REQUEST, 'size param is required')
+
+        try:
+            size = int(size)
+        except:
+            return api_error(status.HTTP_400_BAD_REQUEST, 'invalid size param')
+
+        url = avatar_url(email, size)
+        ret = { 'url': url }
+        return HttpResponse(json.dumps(ret), status=200,
+                            content_type=json_content_type)
 
 class ActivityHtml(APIView):
     authentication_classes = (TokenAuthentication, )
