@@ -67,6 +67,23 @@ class UserNotificationManager(models.Manager):
             to_user=to_user, msg_type=msg_type, detail=detail)
         n.save()
         return n
+
+    def get_all_notifications(self, seen=None, time_delta=None):
+        """Get all notifications of all users.
+        
+        Arguments:
+        - `self`:
+        - `seen`:
+        - `time_delta`: in seconds
+        """
+        qs = super(UserNotificationManager, self).all()
+        if seen is not None:
+            qs = qs.filter(seen=seen)
+        if time_delta is not None:
+            now = datetime.datetime.now()
+            delta = datetime.timedelta(seconds=time_delta)
+            qs = qs.filter(timestamp__gt=(now-delta))
+        return qs
         
     def get_user_notifications(self, username, seen=None):
         """Get all notifications(group_msg, grpmsg_reply, etc) of a user.
