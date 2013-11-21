@@ -41,7 +41,9 @@ from seahub.utils import gen_file_get_url, gen_token, gen_file_upload_url, \
 from seahub.utils.star import star_file, unstar_file
 from seahub.base.templatetags.seahub_tags import email2nickname
 from seahub.avatar.templatetags.avatar_tags import avatar_url
+from seahub.message.models import UserMessage
 import seahub.settings as settings
+
 try:
     from seahub.settings import CLOUD_MODE
 except ImportError:
@@ -1886,10 +1888,20 @@ class EventsView(APIView):
         if not EVENTS_ENABLED:
             events = None
             return api_error(status.HTTP_404_NOT_FOUND, 'Events not enabled.')
+            
+        start = request.GET.get('start', '')
+        
+        if not start:
+            start = 0
+        else:
+            try:
+                start = int(start)
+            except ValueError:
+                return api_error(status.HTTP_400_BAD_REQUEST, 'start id must be integer')
 
         email = request.user.username
         events_count = 15
-        events, events_more_offset = get_user_events(email, 0, events_count)
+        events, events_more_offset = get_user_events(email, start, events_count)
         events_more = True if len(events) == events_count else False
 
         l = []
@@ -1929,6 +1941,22 @@ class EventsView(APIView):
                             status=200,
                             content_type=json_content_type)
         return resp
+
+class MessagesCountView(APIView):
+    authentication_classes = (TokenAuthentication, )
+    permission_classes = (IsAuthenticated,)
+    throttle_classes = (UserRateThrottle, )
+
+    def get(self, request, format=None):
+        username = request.user.username
+        ret = {}
+
+        notes = UserNotification.objects.filter(to_user=username)
+        ret['group_messages'] = len(notes)
+        ret['personal_messages'] = UserMessage.objects.count_unread_messages_by_user(username)
+
+        return HttpResponse(json.dumps(ret), status=200,
+                            content_type=json_content_type)
 
 class AvatarView(APIView):
     authentication_classes = (TokenAuthentication, )

@@ -29,6 +29,7 @@ urlpatterns = patterns('',
 
     url(r'^groups/$', Groups.as_view()),
     url(r'^events/$', EventsView.as_view()),
+    url(r'^msgs_count/$', MessagesCountView.as_view()),
     url(r'^avatar/$', AvatarView.as_view()),
     url(r'^html/events/$', ActivityHtml.as_view()),
     url(r'^html/more_events/$', AjaxEvents.as_view(), name="more_events"),
